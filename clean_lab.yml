@@ -60,7 +60,7 @@
     #       'server_errors': 0, 
     #       'type': 'pagerduty', 
     #       'created': '2024-12-02T19:20:41.30277', 
-    #       'properties': {'severity': 'warning', 'secret_token': '7425b85d6444430bd0d3ae20c84d6d75'}}
+    #       'properties': {'severity': 'warning', 'secret_token': 'xxxx'}}
 
     # Chech with John if we can delete all intergations? named specifically? specific types? created in the last X hours? etc
     - name: Delete all integrations (with name testing_delete)
