@@ -1,0 +1,131 @@
+---
+- name: Clean account from all integrations and behavior groups
+  hosts: localhost
+  gather_facts: no
+  vars:
+    # HCC service account credentials
+    hcc_client_id: xxxx
+    hcc_client_secret: xxxx
+    auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+    api_url_notifications: "https://console.redhat.com/api/notifications/v1.0/"
+    api_url_integrations: "https://console.redhat.com/api/integrations/v1.0/"
+  tasks:
+    - name: Get Red Hat API access token
+      ansible.builtin.uri:
+        url: "{{ auth_url }}"
+        method: POST
+        body_format: form-urlencoded
+        status_code: 200
+        return_content: true
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+        body:
+          client_id: "{{ hcc_client_id }}"
+          client_secret: "{{ hcc_client_secret }}"
+          scope: "api.console"
+          grant_type: "client_credentials"
+      register: auth_response
+      #no_log: true
+
+    - name: Extract and validate API token
+      set_fact:
+        rh_api_token: "{{ auth_response.json.access_token }}"
+      failed_when: rh_api_token is not defined or rh_api_token | length == 0
+
+    - name: Fetch integrations for the account
+      uri:
+        url: "{{ api_url_integrations }}endpoints"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: response
+      no_log: true
+      failed_when: response.status != 200
+
+    - name: Display all retrieved integrations
+      debug:
+        msg: "{{ item.name }}"
+      loop: "{{ response.json.data }}"
+      when: response.json.data is defined and response.json.data | length > 0
+
+    # Example of an integration
+    # item={'id': 'f3ba164f-6bf3-4b22-b90e-b9bf97b65664', 
+    #       'name': 'PagerDuty-HCCLab', 
+    #       'description': '', 
+    #       'enabled': True, 
+    #       'status': 'READY', 
+    #       'server_errors': 0, 
+    #       'type': 'pagerduty', 
+    #       'created': '2024-12-02T19:20:41.30277', 
+    #       'properties': {'severity': 'warning', 'secret_token': '7425b85d6444430bd0d3ae20c84d6d75'}}
+
+    # Chech with John if we can delete all intergations? named specifically? specific types? created in the last X hours? etc
+    - name: Delete all integrations (with name testing_delete)
+      uri:
+        url: "{{ api_url_integrations }}endpoints/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: no
+        status_code: 204
+      register: response
+      no_log: true
+      failed_when: response.status != 204
+      loop: "{{ response.json.data }}"
+      when: response.json.data is defined and response.json.data | length > 0 and item.name == "testing_delete"
+
+    - name: Fetch bundle id for the account
+      uri:
+        url: "{{ api_url_notifications }}notifications/bundles/openshift"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: response_bundle
+      #no_log: true
+      failed_when: response_bundle.status != 200
+
+    - name: Display retrieved bundle
+      debug:
+        msg: "{{ response_bundle.json.id }} {{ response_bundle.json.name }} {{ response_bundle.json.display_name  }}"
+      when: response_bundle.json is defined
+
+    - name: Fetch behavior groups for the account
+      uri:
+        url: "{{ api_url_notifications }}notifications/bundles/{{ response_bundle.json.id }}/behaviorGroups"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: response_bg
+      #no_log: true
+      failed_when: response_bg.status != 200
+
+    - name: Display all retrieved behavior groups
+      debug:
+        msg: "{{ item.id }} {{ item.display_name  }}"
+      loop: "{{ response_bg.json }}"
+      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name == "Integration \"testing_delete\" behavior group"
+
+    - name: Delete all behavior groups (with name testing_delete)
+      uri:
+        url: "{{ api_url_notifications }}notifications/behaviorGroups/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: no
+        status_code: 200
+      register: response
+      #no_log: true
+      failed_when: response.status != 200
+      loop: "{{ response_bg.json }}"
+      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name == "Integration \"testing_delete\" behavior group"
