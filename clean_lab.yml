@@ -9,9 +9,6 @@
     auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     api_url_notifications: "https://console.redhat.com/api/notifications/v1.0/"
     api_url_integrations: "https://console.redhat.com/api/integrations/v1.0/"
-    per_page: 100
-    extra_params: "&staleness=fresh&staleness=stale"
-    all_hosts: []
   tasks:
     - name: Get Red Hat API access token
       ansible.builtin.uri:
