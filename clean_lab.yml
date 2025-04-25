@@ -1,5 +1,5 @@
 ---
-- name: Clean account from all integrations and behavior groups
+- name: Clean account from integrations and behavior groups created during the lab
   hosts: localhost
   gather_facts: no
   vars:
@@ -9,6 +9,9 @@
     auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     api_url_notifications: "https://console.redhat.com/api/notifications/v1.0/"
     api_url_integrations: "https://console.redhat.com/api/integrations/v1.0/"
+    per_page: 100
+    extra_params: "&staleness=fresh&staleness=stale"
+    all_hosts: []
   tasks:
     - name: Get Red Hat API access token
       ansible.builtin.uri:
@@ -25,16 +28,18 @@
           scope: "api.console"
           grant_type: "client_credentials"
       register: auth_response
-      #no_log: true
-
+      no_log: true
+      
     - name: Extract and validate API token
       set_fact:
         rh_api_token: "{{ auth_response.json.access_token }}"
       failed_when: rh_api_token is not defined or rh_api_token | length == 0
+      no_log: true
 
+    # The name used in the lab for creating the integration follows '<GUID>-EDAIntegration' naming convention and the the type is 'ansible'
     - name: Fetch integrations for the account
       uri:
-        url: "{{ api_url_integrations }}endpoints"
+        url: "{{ api_url_integrations }}endpoints?name=-EDAIntegration&type=ansible"
         method: GET
         headers:
           Authorization: "Bearer {{ rh_api_token }}"
@@ -43,27 +48,14 @@
         status_code: 200
       register: response
       no_log: true
-      failed_when: response.status != 200
 
-    - name: Display all retrieved integrations
-      debug:
-        msg: "{{ item.name }}"
-      loop: "{{ response.json.data }}"
-      when: response.json.data is defined and response.json.data | length > 0
+    # - name: Display all retrieved integrations
+    #   debug:
+    #     msg: "{{ item.name }}"
+    #   loop: "{{ response.json.data }}"
+    #   when: response.json.data is defined and response.json.data | length > 0
 
-    # Example of an integration
-    # item={'id': 'f3ba164f-6bf3-4b22-b90e-b9bf97b65664', 
-    #       'name': 'PagerDuty-HCCLab', 
-    #       'description': '', 
-    #       'enabled': True, 
-    #       'status': 'READY', 
-    #       'server_errors': 0, 
-    #       'type': 'pagerduty', 
-    #       'created': '2024-12-02T19:20:41.30277', 
-    #       'properties': {'severity': 'warning', 'secret_token': 'xxxx'}}
-
-    # Chech with John if we can delete all intergations? named specifically? specific types? created in the last X hours? etc
-    - name: Delete all integrations (with name testing_delete)
+    - name: Delete all integrations
       uri:
         url: "{{ api_url_integrations }}endpoints/{{ item.id }}"
         method: DELETE
@@ -72,15 +64,15 @@
           Content-Type: "application/json"
         return_content: no
         status_code: 204
-      register: response
+      register: response_int_delete
       no_log: true
-      failed_when: response.status != 204
       loop: "{{ response.json.data }}"
-      when: response.json.data is defined and response.json.data | length > 0 and item.name == "testing_delete"
+      when: response.json.data is defined and response.json.data | length > 0 and item.name is defined and '-EDAIntegration' in item.name
 
+    # The behavior group is created in the lab under the Red Hat Enterprise Linux bundle
     - name: Fetch bundle id for the account
       uri:
-        url: "{{ api_url_notifications }}notifications/bundles/openshift"
+        url: "{{ api_url_notifications }}notifications/bundles/rhel"
         method: GET
         headers:
           Authorization: "Bearer {{ rh_api_token }}"
@@ -88,14 +80,14 @@
         return_content: yes
         status_code: 200
       register: response_bundle
-      #no_log: true
-      failed_when: response_bundle.status != 200
+      no_log: true
 
-    - name: Display retrieved bundle
-      debug:
-        msg: "{{ response_bundle.json.id }} {{ response_bundle.json.name }} {{ response_bundle.json.display_name  }}"
-      when: response_bundle.json is defined
+    # - name: Display retrieved bundle
+    #   debug:
+    #     msg: "{{ response_bundle.json.id }} {{ response_bundle.json.name }} {{ response_bundle.json.display_name  }}"
+    #   when: response_bundle.json is defined
 
+    # The name used in the lab for creating the behavior group follows '<GUID>-BehaviorGroup' naming convention
     - name: Fetch behavior groups for the account
       uri:
         url: "{{ api_url_notifications }}notifications/bundles/{{ response_bundle.json.id }}/behaviorGroups"
@@ -106,16 +98,15 @@
         return_content: yes
         status_code: 200
       register: response_bg
-      #no_log: true
-      failed_when: response_bg.status != 200
+      no_log: true
 
-    - name: Display all retrieved behavior groups
-      debug:
-        msg: "{{ item.id }} {{ item.display_name  }}"
-      loop: "{{ response_bg.json }}"
-      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name == "Integration \"testing_delete\" behavior group"
+    # - name: Display all retrieved behavior groups
+    #   debug:
+    #     msg: "{{ item.id }} {{ item.display_name  }}"
+    #   loop: "{{ response_bg.json }}"
+    #   when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and "-BehaviorGroup" in item.display_name
 
-    - name: Delete all behavior groups (with name testing_delete)
+    - name: Delete all behavior groups
       uri:
         url: "{{ api_url_notifications }}notifications/behaviorGroups/{{ item.id }}"
         method: DELETE
@@ -124,8 +115,7 @@
           Content-Type: "application/json"
         return_content: no
         status_code: 200
-      register: response
-      #no_log: true
-      failed_when: response.status != 200
+      register: response_delete_bg
+      no_log: true
       loop: "{{ response_bg.json }}"
-      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name == "Integration \"testing_delete\" behavior group"
+      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and "-BehaviorGroup" in item.display_name
