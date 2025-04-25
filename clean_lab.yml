@@ -10,6 +10,11 @@
     api_url_notifications: "https://console.redhat.com/api/notifications/v1.0/"
     api_url_integrations: "https://console.redhat.com/api/integrations/v1.0/"
   tasks:
+    # guid to be specified in the command line e.g. ansible-playbook clean_lab.yml -e "guid=2t2xg"
+    - name: Set GUID if defined
+      set_fact:
+        lab_guid: "{{ guid if guid is defined else '' }}"
+
     - name: Get Red Hat API access token
       ansible.builtin.uri:
         url: "{{ auth_url }}"
@@ -36,7 +41,7 @@
     # The name used in the lab for creating the integration follows '<GUID>-EDAIntegration' naming convention and the the type is 'ansible'
     - name: Fetch integrations for the account
       uri:
-        url: "{{ api_url_integrations }}endpoints?name=-EDAIntegration&type=ansible"
+        url: "{{ api_url_integrations }}endpoints?name={{ lab_guid }}-EDAIntegration&type=ansible"
         method: GET
         headers:
           Authorization: "Bearer {{ rh_api_token }}"
@@ -44,7 +49,7 @@
         return_content: yes
         status_code: 200
       register: response
-      no_log: true
+      #no_log: true
 
     # - name: Display all retrieved integrations
     #   debug:
@@ -64,7 +69,7 @@
       register: response_int_delete
       no_log: true
       loop: "{{ response.json.data }}"
-      when: response.json.data is defined and response.json.data | length > 0 and item.name is defined and '-EDAIntegration' in item.name
+      when: response.json.data is defined and response.json.data | length > 0 and item.name is defined and (lab_guid ~ '-EDAIntegration') in item.name
 
     # The behavior group is created in the lab under the Red Hat Enterprise Linux bundle
     - name: Fetch bundle id for the account
@@ -101,7 +106,7 @@
     #   debug:
     #     msg: "{{ item.id }} {{ item.display_name  }}"
     #   loop: "{{ response_bg.json }}"
-    #   when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and "-BehaviorGroup" in item.display_name
+    #   when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and (lab_guid ~ '-BehaviorGroup') in item.display_name
 
     - name: Delete all behavior groups
       uri:
@@ -115,4 +120,4 @@
       register: response_delete_bg
       no_log: true
       loop: "{{ response_bg.json }}"
-      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and "-BehaviorGroup" in item.display_name
+      when: response_bg.json is defined and response_bg.json | length > 0 and item.display_name is defined and (lab_guid ~ '-BehaviorGroup') in item.display_name
