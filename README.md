@@ -1,21 +1,57 @@
-# Example: Clean Hybrid Cloud Console account from all integrations and behavior groups
+## Clean Hybrid Cloud Console Account (Integrations, Behavior Groups, Vulnerability & Compliance Artifacts)
 
-This repository contains an example Ansible playbook designed to clean up a Red Hat Hybrid Cloud Console account by deleting all integrations and behavior groups. It is intended for use cases such as Red Hat Summit lab teardown after sessions conclude.
+This repository contains example Ansible playbooks designed to clean up a **Red Hat Hybrid Cloud Console (HCC)** account by removing artifacts created during lab or demo environments, such as **Red Hat Summit labs**.
 
-Disclaimer: This playbook is provided as an example for educational purposes. It may require modifications to fit specific use cases or security policies. Use it at your own discretion.
+The cleanup includes:
+- Integrations
+- Behavior groups
+- Compliance policies
+- Vulnerability and compliance remediations created during the lab
 
-## Features
-- Authenticates with Red Hat API using **OAuth 2.0 Client Credentials**.
-- Fetches **integrations** and **behavior groups** via Hybrid Cloud Console / Insights API.
-- Deletes **integrations** and **behavior groups** based on specific criteria.
+These playbooks are intended for **lab teardown and account reset** after sessions conclude.
 
-## Pre-requisites
-Before running the playbook, ensure you have the following variables configured:
 
-- **`hcc_client_id`**: Your Red Hat API Client ID.
-- **`hcc_client_secret`**: Your Red Hat API Client Secret.
+### ⚠️ Disclaimer
 
-# Documentation & References
-- [Red Hat Insights API Documentation](https://console.redhat.com/docs/api)
-- [Red Hat Insights API Cheatsheet](https://developers.redhat.com/cheat-sheets/red-hat-insights-api-cheat-sheet)
-- [Red Hat Insights Documentation](https://docs.redhat.com/en/documentation/red_hat_insights/1-latest)
+These playbooks are provided as **examples for educational purposes**.  
+They may require modification to fit your specific environment, organizational policies, or security requirements.
+
+**Use at your own discretion.**
+
+
+### Features
+
+- Authenticates with Red Hat APIs using **OAuth 2.0 Client Credentials**
+- Interacts with **Hybrid Cloud Console / Lightspeed APIs**
+- Deletes:
+  - Integrations
+  - Behavior groups
+  - Compliance policies
+  - Vulnerability & compliance remediations created during labs
+- Supports cleanup scoped by a **GUID** used during the lab
+
+
+### Prerequisites
+
+Before running any playbook, ensure the following variables are configured:
+
+- `hcc_client_id` – Your Red Hat API Client ID  
+- `hcc_client_secret` – Your Red Hat API Client Secret  
+
+These credentials must have sufficient permissions to manage Insights, Compliance, and Vulnerability resources.
+
+
+### Usage
+
+Run the following command and provide the **GUID** associated with the lab environment:
+
+```bash
+ansible-playbook clean_lab.yml -e "guid=GUID"
+ansible-playbook clean_vuln_comp.yml -e "guid=GUID"
+```
+
+
+### Documentation & References
+- [Red Hat Lightspeed API Documentation](https://console.redhat.com/docs/api)
+- [Red Hat Lightspeed API Cheatsheet](https://developers.redhat.com/cheat-sheets/red-hat-insights-api-cheat-sheet)
+- [Red Hat Lightspeed Documentation](https://docs.redhat.com/en/documentation/red_hat_insights/1-latest)
