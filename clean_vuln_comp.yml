@@ -1,0 +1,111 @@
+---
+- name: Clean account from vulnerability and compliance created during the lab
+  hosts: localhost
+  gather_facts: no
+  vars:
+    hcc_client_id: xxxx
+    hcc_client_secret: xxxx
+    skip_remediation_delete: true
+    auth_url: "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+    api_url_compliance: "https://console.redhat.com/api/compliance/v2/"
+    api_url_remediations: "https://console.redhat.com/api/remediations/v1/"
+  tasks:
+    # guid to be specified in the command line e.g. ansible-playbook clean_lab.yml -e "guid=2t2xg"
+    - name: Set GUID if defined
+      set_fact:
+        lab_guid: "{{ guid if guid is defined else '' }}"
+
+    - name: Get Red Hat API access token
+      ansible.builtin.uri:
+        url: "{{ auth_url }}"
+        method: POST
+        body_format: form-urlencoded
+        status_code: 200
+        return_content: true
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+        body:
+          client_id: "{{ hcc_client_id }}"
+          client_secret: "{{ hcc_client_secret }}"
+          scope: "api.console"
+          grant_type: "client_credentials"
+      register: auth_response
+      no_log: true
+      
+    - name: Extract and validate API token
+      set_fact:
+        rh_api_token: "{{ auth_response.json.access_token }}"
+      failed_when: rh_api_token is not defined or rh_api_token | length == 0
+      no_log: true
+
+    # Naming conversion used in the lab follow 
+    # - Compliance policy: "{guid} CIS L1 Server Policy"
+    # - Compliance remediation: "{guid} compliance fix"
+    # - Vulnerability remediation: "43458 fix {guid}"
+
+    # The name used in the lab for creating the integration follows '<GUID>-EDAIntegration' naming convention and the the type is 'ansible'
+    - name: Fetch remediations for the account
+      uri:
+        url: "{{ api_url_remediations }}remediations?filter={{ lab_guid }}"
+        # Query example: https://console.redhat.com/api/remediations/v1/remediations?sort=-updated_at&filter=GUID&limit=50&offset=0&hide_archived=false
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: response
+      #no_log: true
+
+    - name: Display all retrieved remediations
+      debug:
+        msg: "{{ item.name }}"
+      loop: "{{ response.json.data }}"
+      when: response.json.data is defined and response.json.data | length > 0
+
+    - name: Delete all remediations
+      uri:
+        url: "{{ api_url_remediations }}remediations/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: no
+        status_code: 204
+      register: response_rem_delete
+      #no_log: true
+      loop: "{{ response.json.data }}"
+      when: response.json.data is defined and response.json.data | length > 0 and item.name is defined and not skip_remediation_delete
+
+    - name: Fetch compliance policies for the account
+      uri:
+        url: "{{ api_url_compliance }}policies?filter=title~GUID"
+        # Example query: https://console.redhat.com/api/compliance/v2/policies?limit=10&offset=0&filter=title~GUID
+        method: GET
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+        status_code: 200
+      register: response_compliance
+      #no_log: true
+
+    - name: Display all retrieved compliance policies
+      debug:
+        msg: "{{ item.id }} {{ item.title }}"
+      loop: "{{ response_compliance.json.data }}"
+      when: response_compliance.json is defined and response_compliance.json.data | length > 0 and item.title is defined
+
+    - name: Delete all compliance policies
+      uri:
+        url: "{{ api_url_compliance }}policies/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ rh_api_token }}"
+          Content-Type: "application/json"
+        return_content: no
+        status_code: 202
+      register: response_delete_compliance
+      #no_log: true
+      loop: "{{ response_compliance.json.data }}"
+      when: response_compliance.json is defined and response_compliance.json.data | length > 0 and item.title is defined
